@@ -112,6 +112,23 @@ Open http://localhost:3000.
 docker compose up --build
 ```
 
+Web: http://localhost:3000 · API: http://localhost:8000/api/health
+
+## Deploy
+
+The API lives in a single container (Playwright base image). The repo
+ships a `fly.toml` for deploying just the API to Fly.io:
+
+```bash
+fly launch --copy-config --no-deploy
+fly volumes create site2book_data --size 1 --region lhr
+fly deploy
+```
+
+The frontend can deploy to Vercel from `apps/web/` with
+`NEXT_PUBLIC_API_BASE` pointing at the Fly app's URL, or run inside the
+same compose stack for a single-host deploy.
+
 ## Design decisions
 
 - **SSE over polling** — progress streams on one open connection. No `job_id`, no `/status` endpoint, no background worker for MVP.
