@@ -1,5 +1,6 @@
 export type ConvertEvent =
-  | { event: "crawling"; url: string }
+  | { event: "crawling"; url: string; found?: number }
+  | { event: "browser_ready" }
   | { event: "rendering"; page: number; total: number; url: string }
   | { event: "merging" }
   | {
@@ -11,6 +12,8 @@ export type ConvertEvent =
       title: string;
     }
   | { event: "error"; message: string };
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 export interface ConvertInput {
   url: string;
@@ -30,7 +33,7 @@ export async function streamConvert(
   onEvent: (e: ConvertEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch("/api/convert", {
+  const resp = await fetch(`${API_BASE}/api/convert`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify(input),

@@ -33,41 +33,57 @@ export default function HomePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-16">
-      <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-3">
-        Convert any website to a PDF eBook
+    <div className="max-w-3xl mx-auto px-6 py-16 sm:py-24">
+      <div className="mb-8 flex justify-center">
+        <span className="hero-pill">
+          <span className="hero-pill-dot" />
+          Free · No sign-up required
+        </span>
+      </div>
+
+      <h1 className="text-4xl sm:text-6xl font-bold tracking-tight text-center mb-4 leading-[1.05]">
+        Convert any website <br className="hidden sm:inline" />
+        into a <span className="grad-text">PDF eBook</span>
       </h1>
-      <p className="text-[var(--muted)] mb-10 text-lg">
-        Paste a URL. We crawl internal pages, render each one cleanly, and
-        merge them into one PDF with cover, table of contents, and bookmarks.
+      <p className="text-[var(--text-dim)] text-center mb-12 text-lg max-w-xl mx-auto">
+        Paste a URL. We crawl internal pages, render each one cleanly, and merge
+        them into a single polished PDF with cover, table of contents, and
+        clickable bookmarks.
       </p>
 
-      <form onSubmit={onSubmit} className="panel p-6 space-y-5">
+      <form onSubmit={onSubmit} className="panel p-6 sm:p-8 space-y-6">
         <label className="block">
-          <span className="text-sm text-[var(--muted)] mb-2 block">Website URL</span>
-          <input
-            type="url"
-            placeholder="https://example.com/docs/"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            required
-            autoFocus
-          />
+          <span className="text-sm font-medium mb-2 block">Website URL</span>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)] pointer-events-none">
+              <LinkIcon />
+            </span>
+            <input
+              type="url"
+              placeholder="https://example.com/docs/"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              required
+              autoFocus
+              style={{ paddingLeft: 42 }}
+            />
+          </div>
         </label>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <label className="block">
-            <span className="text-sm text-[var(--muted)] mb-2 block">Max pages</span>
+            <span className="text-sm font-medium mb-2 block">Max pages</span>
             <select
               value={maxPages}
               onChange={(e) => setMaxPages(Number(e.target.value))}
             >
+              <option value={5}>5 pages (fast)</option>
               <option value={10}>10 pages</option>
               <option value={20}>20 pages</option>
               <option value={50}>50 pages</option>
             </select>
           </label>
-          <label className="flex items-center gap-3 mt-7">
+          <label className="flex items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 mt-0 sm:mt-7 cursor-pointer">
             <input
               type="checkbox"
               checked={includeSubdomains}
@@ -78,7 +94,7 @@ export default function HomePage() {
           </label>
         </div>
 
-        <label className="flex items-start gap-3 text-sm text-[var(--muted)]">
+        <label className="flex items-start gap-3 text-sm text-[var(--text-dim)]">
           <input
             type="checkbox"
             checked={agreed}
@@ -86,32 +102,81 @@ export default function HomePage() {
             className="w-4 h-4 mt-0.5"
           />
           <span>
-            I confirm I have the right to convert this content. I will respect
-            the source site's terms and copyright.
+            I confirm I have the right to convert this content and will respect
+            the source site&apos;s terms of service and copyright.
           </span>
         </label>
 
         {error && (
-          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg">
+          <div className="text-sm text-[var(--danger)] bg-red-500/10 border border-red-500/25 px-3 py-2 rounded-lg">
             {error}
           </div>
         )}
 
         <button type="submit" className="btn-primary w-full sm:w-auto">
-          Generate eBook
+          Generate eBook →
         </button>
       </form>
 
-      <div className="mt-10 text-sm text-[var(--muted)] space-y-2">
-        <p>
-          <strong className="text-white">Good for:</strong> documentation,
-          blog archives, long-form articles, personal references.
-        </p>
-        <p>
-          <strong className="text-white">Respects:</strong> robots.txt,
-          same-origin by default, path-prefix scoping.
-        </p>
+      <div className="mt-16 grid sm:grid-cols-3 gap-4">
+        <Feature
+          icon={<TocIcon />}
+          title="Cover & Table of Contents"
+          body="Every eBook gets a cover page with source info and a clickable TOC with accurate page numbers."
+        />
+        <Feature
+          icon={<ShieldIcon />}
+          title="Respects robots.txt"
+          body="Same-origin by default, path-prefix scoped, and we honor crawl rules. No abusive scraping."
+        />
+        <Feature
+          icon={<BoltIcon />}
+          title="Real browser rendering"
+          body="Playwright Chromium with print-media CSS. Ads, cookie banners, and chat widgets are stripped."
+        />
       </div>
     </div>
+  );
+}
+
+function Feature({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+  return (
+    <div className="feature-card">
+      <div className="w-9 h-9 rounded-lg bg-[var(--accent-soft)] text-[var(--accent)] flex items-center justify-center mb-3">
+        {icon}
+      </div>
+      <div className="font-semibold mb-1">{title}</div>
+      <p className="text-sm text-[var(--muted)] leading-relaxed">{body}</p>
+    </div>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+function TocIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M3 12h18M3 18h12" />
+    </svg>
+  );
+}
+function ShieldIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+function BoltIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </svg>
   );
 }

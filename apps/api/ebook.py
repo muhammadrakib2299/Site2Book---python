@@ -138,45 +138,61 @@ async def build_ebook(
     crawl_opts = crawl_opts or CrawlOptions()
     emit = on_progress or (lambda _event, _data: None)
 
-    emit("crawling", {"url": seed_url})
-    crawled = await crawl(seed_url, crawl_opts)
+    emit("crawling", {"url": seed_url, "found": 0})
+
+    # Launch Chromium in parallel with the crawl — the browser cold start
+    # is 2–8s and the crawl usually takes longer, so by the time we're
+    # ready to render the browser is already warm.
+    pw = await async_playwright().start()
+    browser_task = asyncio.create_task(pw.chromium.launch(headless=True))
+
+    try:
+        crawled = await crawl(seed_url, crawl_opts, on_progress=emit)
+    except Exception:
+        browser_task.cancel()
+        await pw.stop()
+        raise
+
     if not crawled.pages:
+        browser_task.cancel()
+        await pw.stop()
         raise RuntimeError("Crawler returned zero pages")
 
     book_title = title or crawled.pages[0].title
 
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=True)
-        try:
-            chapter_pdfs: list[tuple[str, bytes, int]] = []
-            for i, page in enumerate(crawled.pages, 1):
-                emit("rendering", {"page": i, "total": len(crawled.pages), "url": page.url})
-                result = await render_url(page.url, browser=browser)
-                pcount = _count_pages(result.pdf_bytes)
-                chapter_pdfs.append((page.title or page.url, result.pdf_bytes, pcount))
+    browser = await browser_task
+    emit("browser_ready", {})
 
-            emit("merging", {})
+    chapter_pdfs: list[tuple[str, bytes, int]] = []
+    try:
+        for i, page in enumerate(crawled.pages, 1):
+            emit("rendering", {"page": i, "total": len(crawled.pages), "url": page.url})
+            result = await render_url(page.url, browser=browser)
+            pcount = _count_pages(result.pdf_bytes)
+            chapter_pdfs.append((page.title or page.url, result.pdf_bytes, pcount))
 
-            # Compute chapter page numbers (1-indexed) for the TOC, accounting for
-            # cover (1 page) + TOC itself. TOC is rendered with a provisional length
-            # first so we know how many pages it occupies before we assign numbers.
-            cover_html = _cover_html(book_title, seed_url, sum(c[2] for c in chapter_pdfs))
-            cover_pdf = await _render_html_to_pdf(browser, cover_html)
-            cover_pages = _count_pages(cover_pdf)
+        emit("merging", {})
 
-            toc_entries_preview = [(t, 0) for t, _, _ in chapter_pdfs]
-            toc_pdf_preview = await _render_html_to_pdf(browser, _toc_html(book_title, toc_entries_preview))
-            toc_pages = _count_pages(toc_pdf_preview)
+        # TOC is rendered twice so the second render knows exactly how
+        # long the TOC itself will be and chapter page numbers are correct.
+        cover_html = _cover_html(book_title, seed_url, sum(c[2] for c in chapter_pdfs))
+        cover_pdf = await _render_html_to_pdf(browser, cover_html)
+        cover_pages = _count_pages(cover_pdf)
 
-            running = cover_pages + toc_pages + 1  # first chapter starts here (1-indexed)
-            toc_entries: list[tuple[str, int]] = []
-            for title_ch, _pdf, pcount in chapter_pdfs:
-                toc_entries.append((title_ch, running))
-                running += pcount
+        toc_entries_preview = [(t, 0) for t, _, _ in chapter_pdfs]
+        toc_pdf_preview = await _render_html_to_pdf(browser, _toc_html(book_title, toc_entries_preview))
+        toc_pages = _count_pages(toc_pdf_preview)
 
-            toc_pdf = await _render_html_to_pdf(browser, _toc_html(book_title, toc_entries))
-        finally:
-            await browser.close()
+        running = cover_pages + toc_pages + 1
+        toc_entries: list[tuple[str, int]] = []
+        for title_ch, _pdf, pcount in chapter_pdfs:
+            toc_entries.append((title_ch, running))
+            running += pcount
+
+        toc_pdf = await _render_html_to_pdf(browser, _toc_html(book_title, toc_entries))
+    finally:
+        await browser.close()
+        await pw.stop()
 
     merged = _merge_with_bookmarks(
         cover_pdf,

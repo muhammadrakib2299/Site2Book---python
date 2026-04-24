@@ -16,11 +16,15 @@ import asyncio
 import re
 from collections import deque
 from dataclasses import dataclass, field
+from typing import Callable
 from urllib import robotparser
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qsl, urlencode
 
 import httpx
 from bs4 import BeautifulSoup
+
+
+CrawlProgressFn = Callable[[str, dict], None]
 
 
 USER_AGENT = "Site2Book/0.1 (+https://github.com/muhammadrakib2299/Site2Book---python)"
@@ -208,8 +212,15 @@ def _extract_title(soup: BeautifulSoup, fallback: str) -> str:
     return fallback
 
 
-async def crawl(seed_url: str, opts: CrawlOptions | None = None) -> CrawlResult:
+async def crawl(
+    seed_url: str,
+    opts: CrawlOptions | None = None,
+    *,
+    on_progress: CrawlProgressFn | None = None,
+    concurrency: int = 6,
+) -> CrawlResult:
     opts = opts or CrawlOptions()
+    emit = on_progress or (lambda _e, _d: None)
     parsed_seed = urlparse(seed_url)
     seed_host = (parsed_seed.hostname or "").lower()
     seed_prefix = _seed_path_prefix(seed_url)
@@ -219,68 +230,75 @@ async def crawl(seed_url: str, opts: CrawlOptions | None = None) -> CrawlResult:
     seen: set[str] = {seed_canonical}
     queue: deque[tuple[str, int]] = deque([(seed_url, 0)])
     total_bytes = 0
+    sem = asyncio.Semaphore(concurrency)
 
     headers = {"User-Agent": USER_AGENT}
     async with httpx.AsyncClient(
         headers=headers,
         follow_redirects=True,
         timeout=opts.request_timeout_s,
+        limits=httpx.Limits(max_connections=concurrency * 2, max_keepalive_connections=concurrency),
     ) as client:
         rp: robotparser.RobotFileParser | None = None
         if opts.respect_robots:
             rp = await _load_robots(seed_url, client)
 
-        while queue and len(result.pages) < opts.max_pages:
-            url, depth = queue.popleft()
-
+        async def fetch_one(url: str, depth: int):
             if opts.respect_robots and rp is not None and not rp.can_fetch(USER_AGENT, url):
-                result.robots_blocked += 1
-                continue
-
+                return "robots", url, depth, None, []
             if _should_skip(url):
-                result.skipped += 1
-                continue
-
+                return "skip", url, depth, None, []
             try:
-                resp = await client.get(url)
+                async with sem:
+                    resp = await client.get(url)
             except Exception:
-                result.skipped += 1
-                continue
-
+                return "skip", url, depth, None, []
             if resp.status_code >= 400:
-                result.skipped += 1
-                continue
-
+                return "skip", url, depth, None, []
             ctype = resp.headers.get("content-type", "")
             if "html" not in ctype.lower():
-                result.skipped += 1
-                continue
-
+                return "skip", url, depth, None, []
             body = resp.text
-            total_bytes += len(body.encode("utf-8", errors="ignore"))
-            if total_bytes > opts.max_total_bytes:
-                break
-
             soup = BeautifulSoup(body, "html.parser")
             if _is_paywalled(soup):
-                result.skipped += 1
-                continue
-
+                return "skip", url, depth, None, []
             final_url = str(resp.url)
             title = _extract_title(soup, fallback=final_url)
-            result.pages.append(CrawlPage(url=final_url, title=title, depth=depth))
+            page = CrawlPage(url=final_url, title=title, depth=depth)
+            links = _extract_links(soup, final_url) if depth < opts.max_depth else []
+            return "ok", url, depth, page, (links, len(body.encode("utf-8", errors="ignore")))
 
-            if depth >= opts.max_depth:
-                continue
+        while queue and len(result.pages) < opts.max_pages:
+            remaining = opts.max_pages - len(result.pages)
+            batch_size = min(len(queue), remaining, concurrency)
+            batch = [queue.popleft() for _ in range(batch_size)]
 
-            for link in _extract_links(soup, final_url):
-                if not _in_scope(link, seed_host, seed_prefix, opts):
+            tasks = [fetch_one(url, depth) for url, depth in batch]
+            for coro in asyncio.as_completed(tasks):
+                status, _url, depth, page, extra = await coro
+                if status == "robots":
+                    result.robots_blocked += 1
                     continue
-                key = canonicalize(link)
-                if key in seen:
+                if status == "skip" or page is None:
+                    result.skipped += 1
                     continue
-                seen.add(key)
-                queue.append((link, depth + 1))
+                result.pages.append(page)
+                emit("crawling", {"url": page.url, "found": len(result.pages)})
+                if len(result.pages) >= opts.max_pages:
+                    break
+                links, size = extra
+                total_bytes += size
+                if total_bytes > opts.max_total_bytes:
+                    queue.clear()
+                    break
+                for link in links:
+                    if not _in_scope(link, seed_host, seed_prefix, opts):
+                        continue
+                    key = canonicalize(link)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    queue.append((link, depth + 1))
 
     return result
 
