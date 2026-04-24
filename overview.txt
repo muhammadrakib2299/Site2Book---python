@@ -1,0 +1,158 @@
+
+📄 Project Description
+
+Site2Book is a web application that allows users to convert an entire website (or selected pages) into a single downloadable PDF e-book.
+
+Users simply paste a URL, and the system:
+
+Crawls internal pages
+Renders them in a real browser
+Converts each page into PDF
+Merges everything into one clean document
+
+🎯 Target users:
+
+Students saving articles
+Developers exporting docs
+Bloggers archiving content
+Researchers
+⚙️ Tech Stack
+🧠 Backend
+FastAPI → API layer
+Playwright → render + PDF
+BeautifulSoup → extract links
+pypdf → merge PDFs
+Celery (optional) → background jobs
+🎨 Frontend
+Nextjs→ UI
+Tailwind CSS → styling
+🗄️ Storage
+Local storage (MVP)
+Later: AWS S3 / Cloud storage
+🖥️ UI Design (Simple but clean)
+1. Home Page
+Title: “Convert Website to PDF”
+Input box (paste URL)
+Options:
+Max pages (e.g., 10, 20, 50)
+Include/exclude subpages
+Button: Generate eBook
+2. Processing Screen
+Progress bar:
+Crawling pages...
+Generating PDFs...
+Merging...
+Show current page being processed
+3. Result Page
+✅ “Your eBook is ready!”
+Download button
+Preview (optional)
+🎨 UI Layout Idea
++----------------------------------+
+|   Site2Book                      |
+|----------------------------------|
+|  Paste your website URL          |
+|  [ https://example.com     ]     |
+|                                  |
+|  Max Pages: [ 20 ▼ ]             |
+|                                  |
+|  [ Generate PDF ]                |
++----------------------------------+
+📁 Folder Structure
+Backend (FastAPI)
+backend/
+│
+├── app/
+│   ├── main.py            # FastAPI entry point
+│   ├── routes/
+│   │   └── generate.py    # API endpoints
+│   ├── services/
+│   │   ├── crawler.py     # crawl links
+│   │   ├── renderer.py    # Playwright PDF logic
+│   │   ├── merger.py      # merge PDFs
+│   │   └── cleaner.py     # remove ads / unwanted elements
+│   ├── models/
+│   │   └── job.py         # job tracking
+│   ├── utils/
+│   │   └── helpers.py
+│   └── config.py
+│
+├── output/
+│   ├── temp/              # individual PDFs
+│   └── final/             # merged PDF
+│
+├── requirements.txt
+└── README.md
+Frontend (React)
+frontend/
+│
+├── src/
+│   ├── components/
+│   │   ├── UrlForm.jsx
+│   │   ├── ProgressBar.jsx
+│   │   └── DownloadCard.jsx
+│   │
+│   ├── pages/
+│   │   ├── Home.jsx
+│   │   └── Result.jsx
+│   │
+│   ├── services/
+│   │   └── api.js
+│   │
+│   ├── App.jsx
+│   └── main.jsx
+│
+├── public/
+└── package.json
+🔄 Basic API Design
+POST /generate
+
+Input:
+
+{
+  "url": "https://example.com",
+  "max_pages": 20
+}
+
+Output:
+
+{
+  "job_id": "abc123"
+}
+GET /status/{job_id}
+{
+  "status": "processing",
+  "progress": 60
+}
+GET /download/{job_id}
+
+→ returns PDF file
+
+🚧 MVP Plan (Important)
+
+Start small:
+
+Phase 1
+Single page → PDF
+Phase 2
+Multiple pages (limit 5–10)
+Phase 3
+Merge PDFs
+Phase 4
+UI + download
+💡 Extra features (later)
+Table of contents
+Remove ads automatically
+EPUB format
+AI summary per page
+Login + history
+⚠️ Final reality check
+
+Don’t aim for “full website” immediately:
+
+Many sites will break
+Some block scraping
+PDFs can get messy
+
+👉 Focus on:
+clean output > number of pages
